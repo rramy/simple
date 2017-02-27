@@ -1,6 +1,5 @@
 package simple.net.news;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -12,7 +11,9 @@ import simple.net.NNTPClient;
 import simple.net.NNTPClient.Article;
 import simple.net.NNTPClient.Group;
 import simple.lib.Safe;
-import simple.net.NNTPException;
+import simple.Journal;
+import simple.Journal.Log;
+import simple.Journal.Node;
 
 /*
  * To change this license header, choose License Headers in Project Properties.
@@ -66,35 +67,30 @@ public class NewsLeecher {
             private NNTPClient client;
             private List<String> groups;
             
-            public void run() {
+            public void run() {                
                 client = new NNTPClient();
             try {    
                 client.open(host);
-            if (user != null)
+            if (user != null) {
                 client.auth(user, pass);
-            
+            }
                 groups = have(client.list());
                 
                 client.close();
             
-                leech(host, user, pass, conn, groups);
+                startReaders();
             } catch (Throwable cause) {
                 cause.printStackTrace();
             }
             }
+            
+            private void startReaders() {
+                for (int i=0;i<conn;i++)
+                    workers.execute(new Reader(
+                        host, user, pass, groups)); 
+            }
         });
     }    
-    
-    private void leech(
-            final String host, 
-            final String user, 
-            final String pass, 
-            final int conn,
-            final List<String> groups) {
-        for (int i=0;i<conn;i++)
-            workers.execute(new Reader(
-                host, user, pass, groups)); 
-    }
     
     private List<String> have(List<Group> groups) throws Exception { 
         List<String> list = new ArrayList<String>();
@@ -166,67 +162,69 @@ public class NewsLeecher {
 
         public void run() {
             client = new NNTPClient();
-        while (client != null) try {        
+        while (client != null) try {   
             client.open(host);
-        if (user != null)
+            
+        if (user != null) {
             client.auth(user, pass);
-        
-            while (next()) save(article);            
+        }        
+            while (hasNext()) save(article);
         } catch (Exception cause) {
             cause.printStackTrace();
         } catch (OutOfMemoryError err) {
             err.printStackTrace();
             return;
-        } finally {
+        } finally {            
             Safe.close(client);
             Safe.sleep(3000);
-            
-            article = null;
-            group = null;
         }}
-        
-        private boolean next() {     
+
+        private boolean hasNext() {
             if (group == null) nextGroup();
-            else article = nextArticle();            
+            else article = nextArticle();
             if (article == null) nextGroup();
-        try {    
+        try {
             client.article(article);
         } catch (Exception ex) {
             ex.printStackTrace();
             
-            if (empty_articles++ >
+            if (empty_articles++ > 
                     MAX_EMPTY_ARTICLES) {
                 empty_articles = 0;
+                article = null;
                 group = null;
             }
-            
-            return next();
+               
+            return hasNext();
         }
             return article != null;
         }
 
         private void nextGroup() {
-            for (article = null;
-                article == null;) try {
-                    String pick = pick(groups);
-
-                    if (pick == null) return;
-
-                    group = client.group(pick);
-
-                    if (group.isEmpty()) continue;
-
-                    article = client.next();                    
-                } catch (Exception ex) {
-                    ex.printStackTrace();
-                }
+            for (group = null;
+                    group == null;) try {
+                String name = pick(groups);
+                
+                if (name == null) return;
+                
+                group = client.group(name);
+                
+                if (group.isEmpty()) continue;
+                
+                article = client.next();
+                empty_articles = 0;
+            } catch (Exception ex) {
+                ex.printStackTrace();
+                
+                group = null;
+            }
         }
 
         private Article nextArticle() {
             try {
                 return client.next();
-            } catch (Throwable ex) {ex.printStackTrace();
-                return null;
+            } catch (Exception ex) {
+                return article = null;
             }
         }
         

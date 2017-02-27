@@ -12,7 +12,7 @@ package simple.net.news;
 public class TestGiganews {
     
     public static void main(String[] argv) throws Exception {
-        new NewsLeecher().leech("news.giganews.com", "rramy", "jfk25081986!", 2);
+        new NewsLeecher().leech("news.giganews.com", "rramy", "jfk25081986!", 50);
     }
 
 }

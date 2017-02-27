@@ -7,6 +7,6 @@
 /**
  *
  */
-public class Journal {
+public class Proprietes {
 
 }

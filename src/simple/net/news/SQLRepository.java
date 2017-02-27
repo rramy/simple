@@ -12,6 +12,8 @@ import java.sql.Timestamp;
 import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import simple.lib.Date;
 import simple.lib.From;
 import simple.net.NNTPClient;
@@ -38,10 +40,11 @@ public class SQLRepository implements NewsRepository {
     
     public List<String> getGroupsByPriority() throws SQLException {
         Statement statement = database.prepare(
-            "select group_name from news_groups "
+            "select archive_group from narchives group by archive_group order by max(archive_added)");
+            /*"select group_name from news_groups "
                     + "join news_references on news_references.group_id=news_groups.group_id "
                 + "group by news_groups.group_id "
-                + "order by max(news_references.post_id)");
+                + "order by max(news_references.post_id)");*/
         Result result = statement.query();
         
         List<String> groups = new ArrayList<String>();
@@ -57,12 +60,12 @@ public class SQLRepository implements NewsRepository {
     
     private int add_article_count = 0;
 
-    public void _save(Article article) throws SQLException {        
+    public void __save(Article article) throws SQLException {        
          if (add_article_stmt == null)
              add_article_stmt = database.call(
             "call addArticle(?,?,?,?,?,?,?,?,?,?,?)");            
         
-        Timestamp article_date = _parse(article.getDate());        
+        Timestamp article_date = __getTimestamp(article);        
     synchronized(add_article_stmt) { 
         add_article_stmt.clearParameters();
         add_article_stmt.setInt(1, article.getID());
@@ -91,15 +94,14 @@ public class SQLRepository implements NewsRepository {
         if (add_article_count++ > 10) {
             add_article_stmt.executeBatch();
             add_article_stmt.clearBatch();
-            
             add_article_count = 0;
         }
     }
-    }
+    }    
 
     public void save(Article article) throws SQLException {
         SimpleDatabase.Statement statement = database.prepare(
-            "insert into tmp_archives ("
+            "insert into narchives ("
                 + "archive_ref,"
                 + "archive_date,"
                 + "archive_title,"
@@ -115,7 +117,7 @@ public class SQLRepository implements NewsRepository {
             +   "?,?,?,?,?,?,?,?,?,?,?"
             + ")");
         
-        Timestamp timestamp = _parse(article.getDate());  
+        Timestamp timestamp = __getTimestamp(article);
         
         statement.clear();
         statement.set(1, article.getID());
@@ -143,7 +145,7 @@ public class SQLRepository implements NewsRepository {
             // Unknow first <> available on server / unknow on repository
             for (String available : availables)
                 if (!groups.contains(available)) {
-                    groups.add(available);
+                     groups.add(available);
                     return available;
                 }
 
@@ -162,7 +164,8 @@ public class SQLRepository implements NewsRepository {
     /**
      * Parser les dates tronquées
      */
-    private Timestamp _parse(Date date) {
+    private Timestamp __getTimestamp(Article article) {
+        Date date = article.getDate();
         
         return new Timestamp(date.getTime());
         
